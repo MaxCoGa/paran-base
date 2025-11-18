@@ -26,6 +26,7 @@ jobs:
         uses: softprops/action-gh-release@v2 # https://github.com/softprops/action-gh-release
         with:
           body_path: ${{ github.workspace }}-CHANGELOG.txt
+          tag_name: v0.0.1
           files: |
             Release.txt
             LICENSE
