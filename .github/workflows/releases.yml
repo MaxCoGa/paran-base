@@ -4,8 +4,7 @@ on:
   push:
     tags:
       - "v*.*.*"
-      
-on: workflow_dispatch
+  workflow_dispatch:
 
 jobs:
   build:
@@ -13,14 +12,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
       - name: Generate Changelog
         run: echo "# Good things have arrived" > ${{ github.workspace }}-CHANGELOG.txt
+
       - name: Build
         run: echo ${{ github.sha }} > Release.txt
+
       - name: Test
         run: cat Release.txt
+        
       - name: Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2 # https://github.com/softprops/action-gh-release
         with:
           body_path: ${{ github.workspace }}-CHANGELOG.txt
           files: |
