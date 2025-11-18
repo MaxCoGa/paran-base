@@ -1,0 +1,28 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Generate Changelog
+        run: echo "# Good things have arrived" > ${{ github.workspace }}-CHANGELOG.txt
+      - name: Build
+        run: echo ${{ github.sha }} > Release.txt
+      - name: Test
+        run: cat Release.txt
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: ${{ github.workspace }}-CHANGELOG.txt
+          files: |
+            Release.txt
+            LICENSE
