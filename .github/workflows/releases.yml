@@ -12,6 +12,7 @@ permissions:
 
 env:
   release_version: 'v0.0.1'
+  gcc_version: '14.1.0'
 
 jobs:
   build:
@@ -19,6 +20,36 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Set up build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libgmp-dev libmpc-dev libmpfr-dev texinfo flex bison
+
+
+      # from https://github.com/MaxCoGa/paran/blob/main/base/pkg/gcc.sh
+      - name: Download GCC source and prerequisites
+        run: |
+          GCC_VERSION="${{ env.gcc_version }}"
+          wget https://ftp.gnu.org/gnu/gcc/gcc-$GCC_VERSION/gcc-$GCC_VERSION.tar.gz
+          tar -xf gcc-$GCC_VERSION.tar.gz
+          cd gcc-$GCC_VERSION
+          ./contrib/download_prerequisites
+
+      - name: Configure and build GCC
+        run: |
+          GCC_VERSION="${{ env.gcc_version }}"
+          INSTALL_DIR="$HOME/gcc-install"
+          mkdir build-gcc
+          cd build-gcc
+          ../gcc-$GCC_VERSION/configure --prefix=$INSTALL_DIR --enable-languages=c,c++ --disable-multilib
+          make -j$(nproc)
+          make install
+
+      - name: Package compiled GCC
+        run: |
+          cd $HOME
+          tar -czvf gcc-build-${{ env.release_version }}.tar.gz gcc-install
 
       - name: Generate Changelog
         run: echo "# paran-based ${{ env.release_version }}" > ${{ github.workspace }}-CHANGELOG.txt
@@ -32,8 +63,10 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2 # https://github.com/softprops/action-gh-release
         with:
+          name: paran-based ${{ env.release_version }}
           body_path: ${{ github.workspace }}-CHANGELOG.txt
           tag_name: ${{ env.release_version }}
           files: |
             Release.txt
             LICENSE
+            gcc-build-${{ env.release_version }}.tar.gz
