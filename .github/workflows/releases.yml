@@ -59,6 +59,8 @@ jobs:
       - name: Package compiled GCC
         run: |
           cd ${{ env.workdir }}
+          ls ${{ env.workdir }}
+          ls ${{ env.releasedir }}
           tar -czvf cd ${{ env.releasedir }}/gcc-build-${{ env.release_version }}.tar.gz gcc-install
 
       - name: Generate Changelog
