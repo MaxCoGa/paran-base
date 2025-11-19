@@ -67,6 +67,6 @@ jobs:
           body_path: ${{ github.workspace }}-CHANGELOG.txt
           tag_name: ${{ env.release_version }}
           files: |
-            $HOME/Release.txt
+            ./$HOME/Release.txt
             LICENSE
             # $HOME/gcc-build-${{ env.release_version }}.tar.gz
