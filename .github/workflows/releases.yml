@@ -57,7 +57,7 @@ jobs:
       #     tar -czvf gcc-build-${{ env.release_version }}.tar.gz gcc-install
 
       - name: Generate Changelog
-        run: echo "# paran-based ${{ env.release_version }}" > ${{ env.workdir }}/${{ github.workspace }}-CHANGELOG.txt
+        run: echo "# paran-based ${{ env.release_version }}" > ${{ env.workdir }}/paran-based-CHANGELOG.txt
 
       - name: Build
         run: echo ${{ github.sha }} > ${{ env.workdir }}/Release.txt
