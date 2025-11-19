@@ -52,6 +52,8 @@ jobs:
           mkdir build-gcc
           cd build-gcc
           mkdir -p $INSTALL_DIR
+
+          touch $INSTALL_DIR/text.txt
           # ../gcc-$GCC_VERSION/configure --prefix=$INSTALL_DIR --enable-languages=c,c++ --disable-multilib
           # make -j$(nproc)
           # make install
@@ -59,8 +61,8 @@ jobs:
       - name: Package compiled GCC
         run: |
           cd ${{ env.workdir }}
-          ls ${{ env.workdir }}
-          ls ${{ env.releasedir }}
+          ls -l ${{ env.workdir }}
+          ls -l ${{ env.releasedir }}
           tar -czvf cd ${{ env.releasedir }}/gcc-build-${{ env.release_version }}.tar.gz gcc-install
 
       - name: Generate Changelog
