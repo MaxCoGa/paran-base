@@ -21,44 +21,44 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Set up build environment
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libgmp-dev libmpc-dev libmpfr-dev texinfo flex bison
+      # - name: Set up build environment
+      #   run: |
+      #     sudo apt-get update
+      #     sudo apt-get install -y build-essential libgmp-dev libmpc-dev libmpfr-dev texinfo flex bison
 
 
       # from https://github.com/MaxCoGa/paran/blob/main/base/pkg/gcc.sh
-      - name: Download GCC source and prerequisites
-        run: |
-          GCC_VERSION="${{ env.gcc_version }}"
-          wget https://ftp.gnu.org/gnu/gcc/gcc-$GCC_VERSION/gcc-$GCC_VERSION.tar.gz
-          tar -xf gcc-$GCC_VERSION.tar.gz
-          cd gcc-$GCC_VERSION
-          ./contrib/download_prerequisites
+      # - name: Download GCC source and prerequisites
+      #   run: |
+      #     GCC_VERSION="${{ env.gcc_version }}"
+      #     wget https://ftp.gnu.org/gnu/gcc/gcc-$GCC_VERSION/gcc-$GCC_VERSION.tar.gz
+      #     tar -xf gcc-$GCC_VERSION.tar.gz
+      #     cd gcc-$GCC_VERSION
+      #     ./contrib/download_prerequisites
 
-      - name: Configure and build GCC
-        run: |
-          GCC_VERSION="${{ env.gcc_version }}"
-          INSTALL_DIR="$HOME/gcc-install"
-          mkdir build-gcc
-          cd build-gcc
-          ../gcc-$GCC_VERSION/configure --prefix=$INSTALL_DIR --enable-languages=c,c++ --disable-multilib
-          make -j$(nproc)
-          make install
+      # - name: Configure and build GCC
+      #   run: |
+      #     GCC_VERSION="${{ env.gcc_version }}"
+      #     INSTALL_DIR="$HOME/gcc-install"
+      #     mkdir build-gcc
+      #     cd build-gcc
+      #     ../gcc-$GCC_VERSION/configure --prefix=$INSTALL_DIR --enable-languages=c,c++ --disable-multilib
+      #     make -j$(nproc)
+      #     make install
 
-      - name: Package compiled GCC
-        run: |
-          cd $HOME
-          tar -czvf gcc-build-${{ env.release_version }}.tar.gz gcc-install
+      # - name: Package compiled GCC
+      #   run: |
+      #     cd $HOME
+      #     tar -czvf gcc-build-${{ env.release_version }}.tar.gz gcc-install
 
       - name: Generate Changelog
         run: echo "# paran-based ${{ env.release_version }}" > ${{ github.workspace }}-CHANGELOG.txt
 
       - name: Build
-        run: echo ${{ github.sha }} > Release.txt
+        run: echo ${{ github.sha }} > $HOME/Release.txt
 
       - name: Test
-        run: cat Release.txt
+        run: cat $HOME/Release.txt
         
       - name: Release
         uses: softprops/action-gh-release@v2 # https://github.com/softprops/action-gh-release
@@ -67,6 +67,6 @@ jobs:
           body_path: ${{ github.workspace }}-CHANGELOG.txt
           tag_name: ${{ env.release_version }}
           files: |
-            Release.txt
+            $HOME/Release.txt
             LICENSE
-            gcc-build-${{ env.release_version }}.tar.gz
+            # $HOME/gcc-build-${{ env.release_version }}.tar.gz
