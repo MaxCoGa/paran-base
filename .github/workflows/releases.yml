@@ -65,14 +65,16 @@ jobs:
       - name: Test
         run: cat ${{ env.workdir }}/Release.txt
         
+      - name: List Files
+        run: ls ${{ env.workdir }}  
+
       - name: Release
         uses: softprops/action-gh-release@v2 # https://github.com/softprops/action-gh-release
-        working-directory: ${{ env.workdir }}
         with:
           name: paran-based ${{ env.release_version }}
           body_path: ${{ github.workspace }}-CHANGELOG.txt
           tag_name: ${{ env.release_version }}
+          fail_on_unmatched_files: true
           files: |
-            Release.txt
-            LICENSE
+            /tmp/paranbuild/*
             
