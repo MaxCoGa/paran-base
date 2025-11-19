@@ -13,6 +13,7 @@ permissions:
 env:
   release_version: 'v0.0.1'
   gcc_version: '14.1.0'
+  workdir: '/tmp/paranbuild'
 
 jobs:
   build:
@@ -20,6 +21,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: create workdir
+        run: |
+          mkdir -p ${{ env.workdir }}
 
       # - name: Set up build environment
       #   run: |
@@ -52,21 +57,22 @@ jobs:
       #     tar -czvf gcc-build-${{ env.release_version }}.tar.gz gcc-install
 
       - name: Generate Changelog
-        run: echo "# paran-based ${{ env.release_version }}" > ${{ github.workspace }}-CHANGELOG.txt
+        run: echo "# paran-based ${{ env.release_version }}" > ${{ env.workdir }}/${{ github.workspace }}-CHANGELOG.txt
 
       - name: Build
-        run: echo ${{ github.sha }} > $HOME/Release.txt
+        run: echo ${{ github.sha }} > ${{ env.workdir }}/Release.txt
 
       - name: Test
-        run: cat $HOME/Release.txt
+        run: cat ${{ env.workdir }}/Release.txt
         
       - name: Release
         uses: softprops/action-gh-release@v2 # https://github.com/softprops/action-gh-release
+        working-directory: ${{ env.workdir }}
         with:
           name: paran-based ${{ env.release_version }}
           body_path: ${{ github.workspace }}-CHANGELOG.txt
           tag_name: ${{ env.release_version }}
           files: |
-            ./$HOME/Release.txt
+            Release.txt
             LICENSE
-            # $HOME/gcc-build-${{ env.release_version }}.tar.gz
+            
