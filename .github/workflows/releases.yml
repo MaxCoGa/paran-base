@@ -1,5 +1,7 @@
 name: release
 
+run-name: releasing gcc
+
 on:
   push:
     tags:
