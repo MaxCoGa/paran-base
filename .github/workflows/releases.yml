@@ -35,14 +35,14 @@ jobs:
 
 
       # from https://github.com/MaxCoGa/paran/blob/main/base/pkg/gcc.sh
-      # - name: Download GCC source and prerequisites
-      #   run: |
-      #     cd ${{ env.workdir }}
-      #     GCC_VERSION="${{ env.gcc_version }}"
-      #     wget https://ftp.gnu.org/gnu/gcc/gcc-$GCC_VERSION/gcc-$GCC_VERSION.tar.gz
-      #     tar -xf gcc-$GCC_VERSION.tar.gz
-      #     cd gcc-$GCC_VERSION
-      #     ./contrib/download_prerequisites
+      - name: Download GCC source and prerequisites
+        run: |
+          cd ${{ env.workdir }}
+          GCC_VERSION="${{ env.gcc_version }}"
+          wget https://ftp.gnu.org/gnu/gcc/gcc-$GCC_VERSION/gcc-$GCC_VERSION.tar.gz
+          tar -xf gcc-$GCC_VERSION.tar.gz
+          cd gcc-$GCC_VERSION
+          ./contrib/download_prerequisites
 
       - name: Configure and build GCC
         run: |
@@ -51,18 +51,13 @@ jobs:
           INSTALL_DIR="${{ env.workdir }}/gcc-install"
           mkdir build-gcc
           cd build-gcc
-          mkdir -p $INSTALL_DIR
-
-          touch $INSTALL_DIR/text.txt
-          # ../gcc-$GCC_VERSION/configure --prefix=$INSTALL_DIR --enable-languages=c,c++ --disable-multilib
-          # make -j$(nproc)
-          # make install
+          ../gcc-$GCC_VERSION/configure --prefix=$INSTALL_DIR --enable-languages=c,c++ --disable-multilib
+          make -j$(nproc)
+          make install
 
       - name: Package compiled GCC
         run: |
           cd ${{ env.workdir }}
-          ls -l ${{ env.workdir }}
-          ls -l ${{ env.releasedir }}
           tar -czvf ${{ env.releasedir }}/gcc-build-${{ env.release_version }}.tar.gz gcc-install
 
       - name: Generate Changelog
