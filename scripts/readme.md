@@ -1,0 +1,2 @@
+sudo bash ./scripts/install-gcc-from-dir.sh /workspaces/gcc-install --prefix /opt/gcc-14.1.0 --system --force-links
+sudo bash scripts/uninstall-gcc-from-dir.sh --prefix /opt/gcc-14.1.0 --remove-tree --yes
