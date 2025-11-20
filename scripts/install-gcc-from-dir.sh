@@ -33,6 +33,13 @@ if [ "$#" -lt 1 ]; then
 fi
 
 SRC_DIR=$(realpath "$1")
+SRC_ROOT="$SRC_DIR"
+# If the provided directory contains a staged `usr/` layout (common package staging),
+# treat that `usr` as the source root so archives produced with `DESTDIR` work.
+if [ -d "$SRC_DIR/usr" ]; then
+  echo "Detected staged usr/ layout in $SRC_DIR; using $SRC_DIR/usr as source root"
+  SRC_ROOT="$SRC_DIR/usr"
+fi
 shift || true
 PREFIX=""
 REGISTER=1
@@ -76,29 +83,29 @@ if [ ! -d "$SRC_DIR" ]; then
   exit 2
 fi
 
-if [ ! -d "$SRC_DIR/bin" ]; then
-  echo "Directory doesn't look like a gcc install (missing bin): $SRC_DIR"
+if [ ! -d "$SRC_ROOT/bin" ]; then
+  echo "Directory doesn't look like a gcc install (missing bin): $SRC_ROOT"
   exit 3
 fi
 
 # Try to detect version from the built gcc if executable
 VERSION="local"
-if [ -x "$SRC_DIR/bin/gcc" ]; then
+if [ -x "$SRC_ROOT/bin/gcc" ]; then
   # prefer -dumpfullversion when available, fallback to -dumpversion or --version
-  if ver=$("$SRC_DIR/bin/gcc" -dumpfullversion 2>/dev/null || true); then
+  if ver=$("$SRC_ROOT/bin/gcc" -dumpfullversion 2>/dev/null || true); then
     if [ -n "$ver" ]; then
       VERSION=$ver
     fi
   fi
   if [ "$VERSION" = "local" ]; then
-    if ver=$("$SRC_DIR/bin/gcc" -dumpversion 2>/dev/null || true); then
+    if ver=$("$SRC_ROOT/bin/gcc" -dumpversion 2>/dev/null || true); then
       if [ -n "$ver" ]; then
         VERSION=$ver
       fi
     fi
   fi
   if [ "$VERSION" = "local" ]; then
-    if ver=$("$SRC_DIR/bin/gcc" --version 2>/dev/null | head -n1 | awk '{print $3}' || true); then
+    if ver=$("$SRC_ROOT/bin/gcc" --version 2>/dev/null | head -n1 | awk '{print $3}' || true); then
       if [ -n "$ver" ]; then
         VERSION=$ver
       fi
@@ -112,7 +119,10 @@ else
   DEST_DIR="$PREFIX"
 fi
 
-echo "Source: $SRC_DIR"
+  echo "Source: $SRC_DIR"
+  if [ "$SRC_ROOT" != "$SRC_DIR" ]; then
+    echo "Source root adjusted to: $SRC_ROOT"
+  fi
 echo "Destination: $DEST_DIR"
 
 if [ "$SRC_DIR" = "$DEST_DIR" ]; then
@@ -121,10 +131,10 @@ else
   echo "Copying files to $DEST_DIR (needs sudo if not root)..."
   if [ "$(id -u)" -ne 0 ]; then
     sudo mkdir -p "$(dirname "$DEST_DIR")"
-    sudo rsync -a --delete "$SRC_DIR/" "$DEST_DIR/"
+    sudo rsync -a --delete "$SRC_ROOT/" "$DEST_DIR/"
   else
     mkdir -p "$(dirname "$DEST_DIR")"
-    rsync -a --delete "$SRC_DIR/" "$DEST_DIR/"
+    rsync -a --delete "$SRC_ROOT/" "$DEST_DIR/"
   fi
 fi
 

@@ -53,14 +53,16 @@ jobs:
           INSTALL_DIR="${{ env.workdir }}/gcc-install"
           mkdir build-gcc
           cd build-gcc
-          ../gcc-$GCC_VERSION/configure --prefix=$INSTALL_DIR --enable-languages=c,c++ --disable-multilib
+          # Use canonical /usr prefix and stage the install into $INSTALL_DIR via DESTDIR
+          ../gcc-$GCC_VERSION/configure --prefix=/usr --enable-languages=c,c++ --disable-multilib
           make -j$(nproc)
-          make install
+          make install DESTDIR=$INSTALL_DIR
 
-      - name: Package compiled GCC
+      - name: Package compiled GCC (staged /usr layout)
         run: |
-          cd ${{ env.workdir }}
-          tar -czvf ${{ env.releasedir }}/gcc-build-${{ env.release_version }}.tar.gz gcc-install
+          # Archive the staged /usr tree so the package has a canonical /usr layout
+          cd ${{ env.workdir }}/gcc-install
+          tar -czvf ${{ env.releasedir }}/gcc-build-${{ env.release_version }}.tar.gz usr
 
       - name: Generate Changelog
         run: echo "# paran-based ${{ env.release_version }}" > ${{ env.releasedir }}/paran-based-CHANGELOG.txt
