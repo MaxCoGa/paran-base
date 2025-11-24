@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<EOF
-Usage: $0 PACKAGE_NAME [VERSION]
+Usage: $0 PACKAGE_NAME [VERSION] [BUILD_TARBALL]
 
 Create a basic paranpackage skeleton directory with:
   - MANIFEST
@@ -11,8 +11,12 @@ Create a basic paranpackage skeleton directory with:
   - uninstall.sh (example)
   - files/ (payload placeholder)
 
+If `BUILD_TARBALL` is provided the script will extract that tarball into
+`<PACKAGE>/files/` so the resulting package includes the build tree (for
+example a `usr/` directory produced by a local build).
+
 Example:
-  ./scripts/new-paranpackage.sh helloworld 1.0.0
+  ./scripts/new-paranpackage.sh helloworld 1.0.0 /path/to/build.tar.gz
 
 EOF
   exit 1
@@ -24,6 +28,7 @@ fi
 
 PKG_NAME="$1"
 PKG_VERSION="${2:-0.1.0}"
+BUILD_TARBALL="${3:-}"
 PKG_DIR="$PKG_NAME"
 
 if [ -e "$PKG_DIR" ]; then
@@ -32,6 +37,16 @@ if [ -e "$PKG_DIR" ]; then
 fi
 
 mkdir -p "$PKG_DIR/files"
+
+# If a build tarball path was provided, extract its contents into files/
+if [ -n "${BUILD_TARBALL}" ]; then
+  if [ ! -f "${BUILD_TARBALL}" ]; then
+    echo "Build tarball not found: ${BUILD_TARBALL}" >&2
+    exit 3
+  fi
+  echo "Extracting build tarball into: $PKG_DIR/files/"
+  tar -xzf "${BUILD_TARBALL}" -C "$PKG_DIR/files"
+fi
 
 cat > "$PKG_DIR/MANIFEST" <<EOF
 name: $PKG_NAME
