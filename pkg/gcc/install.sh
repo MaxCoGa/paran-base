@@ -15,7 +15,7 @@ TARGET_PREFIX="$HOME/pp/opt/gcc-14.1.0"
 # Prefer an included files/ tree (e.g. files/usr/). If present, use that
 # directory as the staged build. Otherwise fall back to a packaged tarball,
 # or a repository fallback path.
-PKG_BASE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+PKG_BASE_DIR="$(cd "$(dirname "$0")/.." && pwd)/gcc"
 
 # The package should include a prebuilt tree under files/ (typically a
 # top-level `usr/` directory containing the GCC install). Use that as the
