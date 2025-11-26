@@ -7,6 +7,10 @@ on:
     tags:
       - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      package_input:
+        description: 'Optional package name to build (e.g. "acl"). If empty, build all packages listed in pkg/pkg_list.'
+        required: false
 
 permissions:
   contents: write
@@ -34,6 +38,8 @@ jobs:
 
       - name: Make package matrix
         id: make-matrix
+        env:
+          PACKAGE_INPUT: ${{ github.event.inputs.package_input }}
         run: |
           set -euo pipefail
           python3 ./scripts/make-matrix.py > /tmp/matrix.json
