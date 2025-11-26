@@ -1,0 +1,5 @@
+name: acl
+version: 2.3.2
+description: Access control list utilities
+install: install.sh
+uninstall: uninstall.sh
