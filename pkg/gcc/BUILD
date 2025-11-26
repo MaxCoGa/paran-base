@@ -27,11 +27,9 @@ RELEASE_DIR="$WORKDIR/release"
 PKG_DIR="$(cd "$(dirname "$0")" && pwd)"
 TARGET_FILES_DIR="$PKG_DIR/files"
 
-echo "BUILD: workdir=$WORKDIR gcc=$GCC_VERSION release=$RELEASE_VERSION"
+echo "BUILD: workdir=$WORKDIR src=$SRC_ARG release=$RELEASE_VERSION"
 
 mkdir -p "$WORKDIR" "$INSTALL_DIR" "$RELEASE_DIR"
-
-cd "$WORKDIR"
 
 # Resolve source: SRC_ARG can be a version or a URL
 cd "$WORKDIR"
