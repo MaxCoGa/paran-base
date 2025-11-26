@@ -1,0 +1,9 @@
+name: gcc
+version: 14.1.0
+description: GNU Compiler Collection (packaged for pp)
+dependencies: bash
+# The install script will look for the prebuilt staged tarball in the workspace
+# by default at /workspaces/paran-base/temp/gcc-build-v0.0.1.tar.gz
+install: install.sh
+uninstall: uninstall.sh
+helper: uninstall-gcc-from-dir.sh
