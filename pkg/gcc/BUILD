@@ -17,7 +17,8 @@ set -euo pipefail
 # `pkg/gcc/files/usr/` so the paranpackage contains the prebuilt layout.
 
 WORKDIR="${1:-/tmp/paranbuild}"
-GCC_VERSION="${2:-14.1.0}"
+# Second arg may be a gcc version (e.g. 14.1.0) or a full source tarball URL
+SRC_ARG="${2:-14.1.0}"
 RELEASE_VERSION="${3:-v0.0.1}"
 
 INSTALL_DIR="$WORKDIR/gcc-install"
@@ -32,15 +33,35 @@ mkdir -p "$WORKDIR" "$INSTALL_DIR" "$RELEASE_DIR"
 
 cd "$WORKDIR"
 
-SRC_TARBALL="gcc-${GCC_VERSION}.tar.gz"
-SRC_DIR="gcc-${GCC_VERSION}"
-if [ ! -d "$SRC_DIR" ]; then
+# Resolve source: SRC_ARG can be a version or a URL
+cd "$WORKDIR"
+if echo "$SRC_ARG" | grep -Eq '^https?://'; then
+  SRC_URL="$SRC_ARG"
+  SRC_TARBALL="$(basename "$SRC_URL")"
   if [ ! -f "$SRC_TARBALL" ]; then
-    echo "Downloading GCC source: $SRC_TARBALL"
-    wget "https://ftp.gnu.org/gnu/gcc/gcc-${GCC_VERSION}/${SRC_TARBALL}"
+    echo "Downloading GCC source from URL: $SRC_URL"
+    wget "$SRC_URL"
   fi
   echo "Extracting ${SRC_TARBALL}..."
   tar -xf "$SRC_TARBALL"
+  # try to detect extracted directory (first entry matching gcc-*)
+  SRC_DIR="$(ls -d gcc-* 2>/dev/null | head -n1)"
+  if [ -z "$SRC_DIR" ]; then
+    echo "Error: could not detect extracted source directory from $SRC_TARBALL" >&2
+    exit 4
+  fi
+else
+  GCC_VERSION="$SRC_ARG"
+  SRC_TARBALL="gcc-${GCC_VERSION}.tar.gz"
+  SRC_DIR="gcc-${GCC_VERSION}"
+  if [ ! -d "$SRC_DIR" ]; then
+    if [ ! -f "$SRC_TARBALL" ]; then
+      echo "Downloading GCC source: $SRC_TARBALL"
+      wget "https://ftp.gnu.org/gnu/gcc/gcc-${GCC_VERSION}/${SRC_TARBALL}"
+    fi
+    echo "Extracting ${SRC_TARBALL}..."
+    tar -xf "$SRC_TARBALL"
+  fi
 fi
 
 cd "$SRC_DIR"

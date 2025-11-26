@@ -19,57 +19,106 @@ env:
   releasedir: '/tmp/paranbuild/release'
 
 jobs:
-  build:
+  generate-matrix:
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.make-matrix.outputs.matrix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: create workdir
+      - name: Create workdir
         run: |
           mkdir -p ${{ env.workdir }}
           mkdir -p ${{ env.releasedir }}
+
+      - name: Make package matrix
+        id: make-matrix
+        run: |
+          set -euo pipefail
+          PKG_LIST=pkg/pkg_list
+          python3 - <<'PY' > /tmp/matrix.json
+import json
+rows=[]
+try:
+    with open('pkg/pkg_list','r') as f:
+        for line in f:
+            line=line.strip()
+            if not line or line.startswith('#'):
+                continue
+            parts=line.split()
+            name=parts[0]
+            src=parts[1] if len(parts)>1 else ''
+            deps=parts[2:] if len(parts)>2 else []
+            rows.append({'name':name,'src':src,'deps':deps})
+except FileNotFoundError:
+    pass
+print(json.dumps(rows))
+PY
+          echo "matrix=$(cat /tmp/matrix.json)" >> $GITHUB_OUTPUT
+
+  build-package:
+    needs: generate-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    name: Build ${{ matrix.package.name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
 
       - name: Set up build environment
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libgmp-dev libmpc-dev libmpfr-dev texinfo flex bison
 
-
-      - name: Build GCC paran package
+      - name: Create workdir
         run: |
-          # Use the repo BUILD helper to download, build and produce a paranpackage
-          # The BUILD script will stage /usr into pkg/gcc/files/ and call the
-          # repository packer to produce a complete paranpackage tarball.
-          cd ${{ github.workspace }}
-          ./pkg/gcc/BUILD "${{ env.workdir }}" "${{ env.gcc_version }}" "${{ env.release_version }}"
+          mkdir -p ${{ env.workdir }}
+          mkdir -p ${{ env.releasedir }}
+
+      - name: Build package
+        run: |
+          set -euo pipefail
+          pkg_name="${{ matrix.package.name }}"
+          pkg_src="${{ matrix.package.src }}"
+          echo "Building $pkg_name (src: $pkg_src)"
+          if [ ! -d "pkg/$pkg_name" ]; then
+            echo "Package directory pkg/$pkg_name not found, skipping" >&2
+            exit 0
+          fi
+          if [ -x "pkg/$pkg_name/BUILD" ]; then
+            ./pkg/$pkg_name/BUILD "${{ env.workdir }}" "$pkg_src" "${{ env.release_version }}"
+          else
+            echo "No BUILD script for pkg/$pkg_name, skipping build" >&2
+            exit 0
+          fi
 
       - name: Package paranpackage
         run: |
-          # Create a full paranpackage tarball (includes MANIFEST, scripts, helpers, files/)
-          cd ${{ github.workspace }}
-          OUT_TAR="${{ env.releasedir }}/gcc-paranpackage-${{ env.release_version }}.tar.gz"
-          ./scripts/pack-paranpackage.sh pkg/gcc "$OUT_TAR"
+          pkg_name="${{ matrix.package.name }}"
+          OUT_TAR="${{ env.releasedir }}/${pkg_name}-${{ env.release_version }}.tar.gz"
+          ./scripts/pack-paranpackage.sh "pkg/$pkg_name" "$OUT_TAR"
           echo "Created paranpackage: $OUT_TAR"
 
       - name: Generate Changelog
-        run: echo "# paran-based ${{ env.release_version }}" > ${{ env.releasedir }}/paran-based-CHANGELOG.txt
+        run: |
+          echo "# paran-based ${{ env.release_version }}" > ${{ env.releasedir }}/${{ matrix.package.name }}-CHANGELOG.txt
 
-      - name: Build
-        run: echo ${{ github.sha }} > ${{ env.releasedir }}/Release.txt
+      - name: Build metadata
+        run: echo ${{ github.sha }} > ${{ env.releasedir }}/${{ matrix.package.name }}-Release.txt
 
-      - name: Test
-        run: cat ${{ env.releasedir }}/Release.txt
-        
-      - name: List Files
-        run: ls ${{ env.releasedir }}  
+      - name: List package file
+        run: ls -la "${{ env.releasedir }}" || true
 
-      - name: Release
-        uses: softprops/action-gh-release@v2 # https://github.com/softprops/action-gh-release
+      - name: Release package
+        uses: softprops/action-gh-release@v2
         with:
-          name: paran-based ${{ env.release_version }}
-          body_path: ${{ env.releasedir }}/paran-based-CHANGELOG.txt
-          tag_name: ${{ env.release_version }}
+          name: "paran-based ${{ env.release_version }}"
+          body_path: "${{ env.releasedir }}/${{ matrix.package.name }}-CHANGELOG.txt"
+          tag_name: "${{ env.release_version }}"
           fail_on_unmatched_files: true
           files: |
             /tmp/paranbuild/release/*
