@@ -7,6 +7,73 @@ builds each package listed there (one matrix job per package), packs the
 package with `./scripts/pack-paranpackage.sh`, and publishes a single GitHub
 release containing all produced paranpackage tarballs.
 
+## PACKAGING (conventions)
+
+This section formalizes the `pkg_list` and `BUILD` conventions used by the
+release pipeline. Treat this as the canonical packaging guidance (same
+content as a `PACKAGING.md` file, but embedded here for convenience).
+
+Package index (`pkg/pkg_list`)
+- Format: one entry per line, whitespace-separated tokens. Lines starting with
+  `#` are comments and empty lines are ignored.
+- Tokens: `package_name [source] [extra...]`
+  - `package_name`: directory under `pkg/` containing the package files.
+  - `source` (optional): either a version (e.g. `14.1.0`) or a full URL to
+    a source tarball. `BUILD` scripts should accept either form.
+  - `extra`: optional additional URLs or metadata; package `BUILD` may parse
+    these if needed.
+
+MANIFEST keys (package-level)
+- `name:` The package name.
+- `version:` Package version.
+- `description:` Short description.
+- `install:` Relative path to install script (e.g. `install.sh`).
+- `uninstall:` Relative path to uninstall script (e.g. `uninstall.sh`).
+- `helper:` (optional) Space-separated helper files that should be copied
+  into `pp_info/<pkg>/` at install time and preserved for uninstall. Example:
+
+  ```text
+  helper: uninstall-from-dir.sh uninstall.sh
+  ```
+
+`pkg/*/BUILD` contract (detailed)
+- Signature: `BUILD WORKDIR SOURCE_OR_VERSION RELEASE_TAG`
+- Purpose: obtain or produce a staged payload for the package and place it
+  under `pkg/<name>/files/`. For binary packages this commonly means a
+  prebuilt `usr/` tree (so `pkg/<name>/files/usr/...` exists). For source
+  packages BUILD may run configure/make/install into a DESTDIR and then copy
+  the staged tree into `pkg/<name>/files/`.
+- Expectations:
+  - BUILD must be idempotent: re-running should replace `pkg/<name>/files/`
+    with the latest staged output.
+  - BUILD should not create the final paranpackage tarball — the repacker
+    (`./scripts/pack-paranpackage.sh`) handles packaging.
+  - BUILD should exit non-zero on failure so CI will mark the job failed.
+
+Packaging steps (how the CI uses these pieces)
+1. `generate-matrix` reads `pkg/pkg_list` and builds a job matrix.
+2. For each package CI runs `pkg/<name>/BUILD WORKDIR SRC RELEASE_TAG`.
+3. CI runs `./scripts/pack-paranpackage.sh pkg/<name> <out-tarball>` to
+   create a complete paranpackage containing `MANIFEST`, `install.sh`,
+   `uninstall.sh`, helpers, and the `files/` payload.
+4. The workflow uploads all produced tarballs as part of a single GitHub
+   release (glob `/tmp/paranbuild/release/*`).
+
+Example minimal `MANIFEST`:
+
+```
+name: helloworld
+version: 1.0.0
+description: Simple hello package
+install: install.sh
+uninstall: uninstall.sh
+# helper: uninstall-from-dir.sh
+```
+
+Tips
+- Use `helper:` to preserve any scripts needed at uninstall time; `pp` will
+  copy those into `pp_info/<pkg>/` and remove them on uninstall.
+
 Quick overview
 - Matrix generation: the workflow reads `pkg/pkg_list` and creates a build
   matrix entry for each package.
