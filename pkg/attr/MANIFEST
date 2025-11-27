@@ -1,0 +1,5 @@
+name: attr
+version: 2.5.2
+description: Extended attribute support library
+install: install.sh
+uninstall: uninstall.sh

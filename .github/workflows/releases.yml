@@ -1,6 +1,6 @@
 name: release
 
-run-name: releasing gcc
+run-name: releasing packages
 
 on:
   push:
@@ -15,10 +15,8 @@ on:
 permissions:
   contents: write
 
-
 env:
   release_version: 'v0.0.1'
-  gcc_version: '14.1.0'
   workdir: '/tmp/paranbuild'
   releasedir: '/tmp/paranbuild/release'
 
@@ -45,14 +43,10 @@ jobs:
           python3 ./scripts/make-matrix.py > /tmp/matrix.json
           echo "matrix=$(cat /tmp/matrix.json)" >> $GITHUB_OUTPUT
 
-  build-package:
+  build-and-release:
     needs: generate-matrix
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        package: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
-    name: Build ${{ matrix.package.name }}
+    name: Build packages (sequential) and create single Release
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -60,54 +54,104 @@ jobs:
       - name: Set up build environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libgmp-dev libmpc-dev libmpfr-dev texinfo flex bison
+          sudo apt-get install -y build-essential libgmp-dev libmpc-dev libmpfr-dev texinfo flex bison jq
 
       - name: Create workdir
         run: |
           mkdir -p ${{ env.workdir }}
           mkdir -p ${{ env.releasedir }}
 
-      - name: Build package
+      - name: Prepare package list
+        id: prepare
         run: |
           set -euo pipefail
-          pkg_name="${{ matrix.package.name }}"
-          pkg_src="${{ matrix.package.src }}"
-          echo "Building $pkg_name (src: $pkg_src)"
-          if [ ! -d "pkg/$pkg_name" ]; then
-            echo "Package directory pkg/$pkg_name not found, skipping" >&2
+          echo "${{ needs.generate-matrix.outputs.matrix }}" > /tmp/matrix.json
+          echo "matrix_file=/tmp/matrix.json" >> $GITHUB_OUTPUT
+
+      - name: Build packages sequentially
+        id: build-loop
+        run: |
+          set -euo pipefail
+          mkdir -p "${{ env.workdir }}" "${{ env.releasedir }}"
+          MATRIX=/tmp/matrix.json
+          if [ ! -f "$MATRIX" ]; then
+            echo "matrix missing, nothing to build"
+            echo "artifacts_count=0" >> $GITHUB_OUTPUT
             exit 0
           fi
-          if [ -x "pkg/$pkg_name/BUILD" ]; then
-            ./pkg/$pkg_name/BUILD "${{ env.workdir }}" "$pkg_src" "${{ env.release_version }}"
+          total=$(jq 'length' "$MATRIX")
+          if [ "$total" -eq 0 ]; then
+            echo "No packages to build"
+            echo "artifacts_count=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          artifacts=()
+          for i in $(seq 0 $((total - 1))); do
+            name=$(jq -r ".[$i].name" "$MATRIX")
+            src=$(jq -r ".[$i].src" "$MATRIX")
+            echo "--- Building $name (src: $src) ---"
+            if [ ! -d "pkg/$name" ]; then
+              echo "pkg/$name not found, skipping"
+              continue
+            fi
+            if [ -x "pkg/$name/BUILD" ]; then
+              ./pkg/$name/BUILD "${{ env.workdir }}" "$src" "${{ env.release_version }}"
+            else
+              echo "No BUILD script for pkg/$name, skipping"
+              continue
+            fi
+            OUT_TAR="${{ env.releasedir }}/$name-${{ env.release_version }}.tar.gz"
+            ./scripts/pack-paranpackage.sh "pkg/$name" "$OUT_TAR"
+            artifacts+=("$OUT_TAR")
+            echo "Created $OUT_TAR"
+          done
+          count=${#artifacts[@]}
+          echo "artifacts_count=$count" >> $GITHUB_OUTPUT
+          if [ "$count" -gt 0 ]; then
+            printf '%s\n' "${artifacts[@]}" > /tmp/artifacts.list || true
+          fi
+          ls -la "${{ env.releasedir }}" || true
+
+      - name: Generate aggregated changelog
+        if: ${{ steps.build-loop.outputs.artifacts_count != '0' }}
+        run: |
+          set -euo pipefail
+          OUT="${{ env.releasedir }}/RELEASE-CHANGELOG.md"
+          echo "# paran-based ${{ env.release_version }}" > "$OUT"
+          echo "" >> "$OUT"
+          echo "Built packages:" >> "$OUT"
+          if [ -f /tmp/artifacts.list ]; then
+            while IFS= read -r a; do
+              bn=$(basename "$a")
+              pkg=$(echo "$bn" | sed -E 's/-'"${{ env.release_version }}"'\.tar\.gz$//')
+              echo "- $pkg" >> "$OUT"
+              if [ -f "${{ env.releasedir }}/$pkg-CHANGELOG.txt" ]; then
+                echo "" >> "$OUT"
+                echo "## $pkg changelog" >> "$OUT"
+                cat "${{ env.releasedir }}/$pkg-CHANGELOG.txt" >> "$OUT"
+                echo "" >> "$OUT"
+              fi
+            done < /tmp/artifacts.list
           else
-            echo "No BUILD script for pkg/$pkg_name, skipping build" >&2
-            exit 0
+            for f in "${{ env.releasedir }}"/*-CHANGELOG.txt; do
+              [ -e "$f" ] || continue
+              pkg=$(basename "$f" | sed -E 's/-CHANGELOG.txt$//')
+              echo "- $pkg" >> "$OUT"
+              echo "" >> "$OUT"
+              echo "## $pkg changelog" >> "$OUT"
+              cat "$f" >> "$OUT"
+              echo "" >> "$OUT"
+            done
           fi
 
-      - name: Package paranpackage
-        run: |
-          pkg_name="${{ matrix.package.name }}"
-          OUT_TAR="${{ env.releasedir }}/${pkg_name}-${{ env.release_version }}.tar.gz"
-          ./scripts/pack-paranpackage.sh "pkg/$pkg_name" "$OUT_TAR"
-          echo "Created paranpackage: $OUT_TAR"
-
-      - name: Generate Changelog
-        run: |
-          echo "# paran-based ${{ env.release_version }}" > ${{ env.releasedir }}/${{ matrix.package.name }}-CHANGELOG.txt
-
-      - name: Build metadata
-        run: echo ${{ github.sha }} > ${{ env.releasedir }}/${{ matrix.package.name }}-Release.txt
-
-      - name: List package file
-        run: ls -la "${{ env.releasedir }}" || true
-
-      - name: Release package
+      - name: Create Release (single)
+        if: ${{ steps.build-loop.outputs.artifacts_count != '0' }}
         uses: softprops/action-gh-release@v2
         with:
           name: "paran-based ${{ env.release_version }}"
-          body_path: "${{ env.releasedir }}/${{ matrix.package.name }}-CHANGELOG.txt"
+          body_path: "${{ env.releasedir }}/RELEASE-CHANGELOG.md"
           tag_name: "${{ env.release_version }}"
           fail_on_unmatched_files: true
           files: |
+            ${{ env.releasedir }}/*
             /tmp/paranbuild/release/*
-            
