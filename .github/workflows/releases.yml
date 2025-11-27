@@ -69,15 +69,6 @@ jobs:
       workdir: ${{ needs.create-release-init.outputs.workdir }}
       releasedir: ${{ needs.create-release-init.outputs.releasedir }}
 
-  build-attr:
-    needs: create-release-init
-    uses: ./.github/workflows/build-package.yml
-    with:
-      package: attr
-      release_version: ${{ needs.create-release-init.outputs.release_version }}
-      workdir: ${{ needs.create-release-init.outputs.workdir }}
-      releasedir: ${{ needs.create-release-init.outputs.releasedir }}
-
   build-acl:
     needs: build-attr
     uses: ./.github/workflows/build-package.yml
