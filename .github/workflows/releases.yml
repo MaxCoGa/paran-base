@@ -21,32 +21,9 @@ env:
   releasedir: '/tmp/paranbuild/release'
 
 jobs:
-  generate-matrix:
+  build-sequential:
     runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.make-matrix.outputs.matrix }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Create workdir
-        run: |
-          mkdir -p ${{ env.workdir }}
-          mkdir -p ${{ env.releasedir }}
-
-      - name: Make package matrix
-        id: make-matrix
-        env:
-          PACKAGE_INPUT: ${{ github.event.inputs.package_input }}
-        run: |
-          set -euo pipefail
-          python3 ./scripts/make-matrix.py > /tmp/matrix.json
-          echo "matrix=$(cat /tmp/matrix.json)" >> $GITHUB_OUTPUT
-
-  build-and-release:
-    needs: generate-matrix
-    runs-on: ubuntu-latest
-    name: Build packages (sequential) and create single Release
+    name: Build packages from `pkg/pkg_build_order` sequentially and produce one Release
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -61,50 +38,55 @@ jobs:
           mkdir -p ${{ env.workdir }}
           mkdir -p ${{ env.releasedir }}
 
-      - name: Prepare package list
-        id: prepare
+      - name: Read build order
+        id: read-order
         run: |
           set -euo pipefail
-          echo "${{ needs.generate-matrix.outputs.matrix }}" > /tmp/matrix.json
-          echo "matrix_file=/tmp/matrix.json" >> $GITHUB_OUTPUT
+          if [ ! -f pkg/pkg_build_order ]; then
+            echo "No pkg/pkg_build_order found; exiting" >&2
+            exit 1
+          fi
+          mapfile -t ORDER < <(grep -E -v '^\s*(#|$)' pkg/pkg_build_order || true)
+          printf '%s\n' "${ORDER[@]}" > /tmp/pkg_build_order.list
+          echo "order_count=${#ORDER[@]}" >> $GITHUB_OUTPUT
 
       - name: Build packages sequentially
         id: build-loop
         run: |
           set -euo pipefail
-          mkdir -p "${{ env.workdir }}" "${{ env.releasedir }}"
-          MATRIX=/tmp/matrix.json
-          if [ ! -f "$MATRIX" ]; then
-            echo "matrix missing, nothing to build"
-            echo "artifacts_count=0" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          total=$(jq 'length' "$MATRIX")
-          if [ "$total" -eq 0 ]; then
-            echo "No packages to build"
+          WORKDIR=${{ env.workdir }}
+          RELEASE=${{ env.release_version }}
+          mkdir -p "$WORKDIR" "${{ env.releasedir }}"
+          if [ ! -f /tmp/pkg_build_order.list ]; then
+            echo "No build order list; nothing to do"
             echo "artifacts_count=0" >> $GITHUB_OUTPUT
             exit 0
           fi
           artifacts=()
-          for i in $(seq 0 $((total - 1))); do
-            name=$(jq -r ".[$i].name" "$MATRIX")
-            src=$(jq -r ".[$i].src" "$MATRIX")
-            echo "--- Building $name (src: $src) ---"
-            if [ ! -d "pkg/$name" ]; then
-              echo "pkg/$name not found, skipping"
+          while IFS= read -r pkg || [ -n "$pkg" ]; do
+            echo "--- Processing package: $pkg ---"
+            if [ -z "$pkg" ]; then
               continue
             fi
-            if [ -x "pkg/$name/BUILD" ]; then
-              ./pkg/$name/BUILD "${{ env.workdir }}" "$src" "${{ env.release_version }}"
+            if [ ! -d "pkg/$pkg" ]; then
+              echo "pkg/$pkg not found; skipping"
+              continue
+            fi
+            pkg_src=$(awk -v p="$pkg" '$1==p {print $2; exit}' pkg/pkg_list || true)
+            if [ -n "$pkg_src" ]; then
+              echo "Building $pkg with src: $pkg_src"
+              ./pkg/$pkg/BUILD "$WORKDIR" "$pkg_src" "$RELEASE"
             else
-              echo "No BUILD script for pkg/$name, skipping"
-              continue
+              echo "Building $pkg with default source/version"
+              ./pkg/$pkg/BUILD "$WORKDIR" "" "$RELEASE"
             fi
-            OUT_TAR="${{ env.releasedir }}/$name-${{ env.release_version }}.tar.gz"
-            ./scripts/pack-paranpackage.sh "pkg/$name" "$OUT_TAR"
+            OUT_TAR="${{ env.releasedir }}/$pkg-${RELEASE}.tar.gz"
+            ./scripts/pack-paranpackage.sh "pkg/$pkg" "$OUT_TAR"
             artifacts+=("$OUT_TAR")
             echo "Created $OUT_TAR"
-          done
+            echo "# paran-based ${RELEASE}" > "${{ env.releasedir }}/$pkg-CHANGELOG.txt"
+            echo "Built package: $pkg" >> "${{ env.releasedir }}/$pkg-CHANGELOG.txt"
+          done < /tmp/pkg_build_order.list
           count=${#artifacts[@]}
           echo "artifacts_count=$count" >> $GITHUB_OUTPUT
           if [ "$count" -gt 0 ]; then
@@ -119,7 +101,7 @@ jobs:
           OUT="${{ env.releasedir }}/RELEASE-CHANGELOG.md"
           echo "# paran-based ${{ env.release_version }}" > "$OUT"
           echo "" >> "$OUT"
-          echo "Built packages:" >> "$OUT"
+          echo "Built packages (in order):" >> "$OUT"
           if [ -f /tmp/artifacts.list ]; then
             while IFS= read -r a; do
               bn=$(basename "$a")
@@ -155,3 +137,4 @@ jobs:
           files: |
             ${{ env.releasedir }}/*
             /tmp/paranbuild/release/*
+            
