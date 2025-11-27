@@ -59,7 +59,7 @@ if [ -d "$WORKDIR/attr-install/usr" ]; then
   extra_cflags="-I$WORKDIR/attr-install/usr/include"
   extra_ldflags="-L$WORKDIR/attr-install/usr/lib"
   extra_pkgconfig="$WORKDIR/attr-install/usr/lib/pkgconfig"
-  export PKG_CONFIG_PATH="$extra_pkgconfig${PKG_CONFIG_PATH:+:}$PKG_CONFIG_PATH"
+  export PKG_CONFIG_PATH="$extra_pkgconfig${PKG_CONFIG_PATH:+:}${PKG_CONFIG_PATH:-}"
 fi
 CPPFLAGS="$extra_cflags" LDFLAGS="$extra_ldflags" ./configure --prefix=/usr --disable-static --docdir=/usr/share/doc/$SRC_DIR
 echo "Building..."
