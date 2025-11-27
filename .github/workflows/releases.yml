@@ -21,120 +21,55 @@ env:
   releasedir: '/tmp/paranbuild/release'
 
 jobs:
-  build-sequential:
+  create-release-init:
     runs-on: ubuntu-latest
-    name: Build packages from `pkg/pkg_build_order` sequentially and produce one Release
+    name: Initialize release (draft)
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up build environment
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libgmp-dev libmpc-dev libmpfr-dev texinfo flex bison jq
-
-      - name: Create workdir
-        run: |
-          mkdir -p ${{ env.workdir }}
-          mkdir -p ${{ env.releasedir }}
-
-      - name: Read build order
-        id: read-order
-        run: |
-          set -euo pipefail
-          if [ ! -f pkg/pkg_build_order ]; then
-            echo "No pkg/pkg_build_order found; exiting" >&2
-            exit 1
-          fi
-          mapfile -t ORDER < <(grep -E -v '^\s*(#|$)' pkg/pkg_build_order || true)
-          printf '%s\n' "${ORDER[@]}" > /tmp/pkg_build_order.list
-          echo "order_count=${#ORDER[@]}" >> $GITHUB_OUTPUT
-
-      - name: Build packages sequentially
-        id: build-loop
-        run: |
-          set -euo pipefail
-          WORKDIR=${{ env.workdir }}
-          RELEASE=${{ env.release_version }}
-          mkdir -p "$WORKDIR" "${{ env.releasedir }}"
-          if [ ! -f /tmp/pkg_build_order.list ]; then
-            echo "No build order list; nothing to do"
-            echo "artifacts_count=0" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          artifacts=()
-          while IFS= read -r pkg || [ -n "$pkg" ]; do
-            echo "--- Processing package: $pkg ---"
-            if [ -z "$pkg" ]; then
-              continue
-            fi
-            if [ ! -d "pkg/$pkg" ]; then
-              echo "pkg/$pkg not found; skipping"
-              continue
-            fi
-            pkg_src=$(awk -v p="$pkg" '$1==p {print $2; exit}' pkg/pkg_list || true)
-            if [ -n "$pkg_src" ]; then
-              echo "Building $pkg with src: $pkg_src"
-              ./pkg/$pkg/BUILD "$WORKDIR" "$pkg_src" "$RELEASE"
-            else
-              echo "Building $pkg with default source/version"
-              ./pkg/$pkg/BUILD "$WORKDIR" "" "$RELEASE"
-            fi
-            OUT_TAR="${{ env.releasedir }}/$pkg-${RELEASE}.tar.gz"
-            ./scripts/pack-paranpackage.sh "pkg/$pkg" "$OUT_TAR"
-            artifacts+=("$OUT_TAR")
-            echo "Created $OUT_TAR"
-            echo "# paran-based ${RELEASE}" > "${{ env.releasedir }}/$pkg-CHANGELOG.txt"
-            echo "Built package: $pkg" >> "${{ env.releasedir }}/$pkg-CHANGELOG.txt"
-          done < /tmp/pkg_build_order.list
-          count=${#artifacts[@]}
-          echo "artifacts_count=$count" >> $GITHUB_OUTPUT
-          if [ "$count" -gt 0 ]; then
-            printf '%s\n' "${artifacts[@]}" > /tmp/artifacts.list || true
-          fi
-          ls -la "${{ env.releasedir }}" || true
-
-      - name: Generate aggregated changelog
-        if: ${{ steps.build-loop.outputs.artifacts_count != '0' }}
-        run: |
-          set -euo pipefail
-          OUT="${{ env.releasedir }}/RELEASE-CHANGELOG.md"
-          echo "# paran-based ${{ env.release_version }}" > "$OUT"
-          echo "" >> "$OUT"
-          echo "Built packages (in order):" >> "$OUT"
-          if [ -f /tmp/artifacts.list ]; then
-            while IFS= read -r a; do
-              bn=$(basename "$a")
-              pkg=$(echo "$bn" | sed -E 's/-'"${{ env.release_version }}"'\.tar\.gz$//')
-              echo "- $pkg" >> "$OUT"
-              if [ -f "${{ env.releasedir }}/$pkg-CHANGELOG.txt" ]; then
-                echo "" >> "$OUT"
-                echo "## $pkg changelog" >> "$OUT"
-                cat "${{ env.releasedir }}/$pkg-CHANGELOG.txt" >> "$OUT"
-                echo "" >> "$OUT"
-              fi
-            done < /tmp/artifacts.list
-          else
-            for f in "${{ env.releasedir }}"/*-CHANGELOG.txt; do
-              [ -e "$f" ] || continue
-              pkg=$(basename "$f" | sed -E 's/-CHANGELOG.txt$//')
-              echo "- $pkg" >> "$OUT"
-              echo "" >> "$OUT"
-              echo "## $pkg changelog" >> "$OUT"
-              cat "$f" >> "$OUT"
-              echo "" >> "$OUT"
-            done
-          fi
-
-      - name: Create Release (single)
-        if: ${{ steps.build-loop.outputs.artifacts_count != '0' }}
+      - name: Create draft release
         uses: softprops/action-gh-release@v2
         with:
-          name: "paran-based ${{ env.release_version }}"
-          body_path: "${{ env.releasedir }}/RELEASE-CHANGELOG.md"
           tag_name: "${{ env.release_version }}"
-          fail_on_unmatched_files: true
-          files: |
-            ${{ env.releasedir }}/*
-            /tmp/paranbuild/release/*
+          name: "paran-based ${{ env.release_version }}"
+          body: "Automated draft release; package jobs will attach assets and append changelogs."
+          draft: true
+
+  build-attr:
+    needs: create-release-init
+    uses: ./.github/workflows/build-package.yml
+    with:
+      package: attr
+      release_version: ${{ env.release_version }}
+      workdir: ${{ env.workdir }}
+      releasedir: ${{ env.releasedir }}
+
+  build-acl:
+    needs: build-attr
+    uses: ./.github/workflows/build-package.yml
+    with:
+      package: acl
+      release_version: ${{ env.release_version }}
+      workdir: ${{ env.workdir }}
+      releasedir: ${{ env.releasedir }}
+
+  build-gcc:
+    needs: build-acl
+    uses: ./.github/workflows/build-package.yml
+    with:
+      package: gcc
+      release_version: ${{ env.release_version }}
+      workdir: ${{ env.workdir }}
+      releasedir: ${{ env.releasedir }}
+
+  create-release:
+    needs: [build-attr, build-acl, build-gcc]
+    runs-on: ubuntu-latest
+    name: Publish release
+    steps:
+      - name: Publish release (softprops)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "${{ env.release_version }}"
+          name: "paran-based ${{ env.release_version }}"
+          draft: false
+          fail_on_unmatched_files: false
             

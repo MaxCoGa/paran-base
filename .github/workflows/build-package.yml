@@ -1,0 +1,77 @@
+name: Build single package (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      package:
+        required: true
+        type: string
+      release_version:
+        required: true
+        type: string
+      workdir:
+        required: false
+        type: string
+      releasedir:
+        required: false
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_name: ${{ steps.upload_release.outputs.artifact-name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libgmp-dev libmpc-dev libmpfr-dev texinfo flex bison jq
+
+      - name: Create workdir
+        run: |
+          WD="${{ inputs.workdir || '/tmp/paranbuild' }}"
+          RD="${{ inputs.releasedir || '/tmp/paranbuild/release' }}"
+          mkdir -p "$WD" "$RD"
+
+      - name: Determine source
+        id: src
+        run: |
+          pkg="${{ inputs.package }}"
+          src="$(awk -v p="$pkg" '$1==p {print $2; exit}' pkg/pkg_list || true)"
+          echo "src=$src" >> $GITHUB_OUTPUT
+
+      - name: Run package BUILD and pack
+        id: buildstep
+        run: |
+          set -euo pipefail
+          pkg="${{ inputs.package }}"
+          WD="${{ inputs.workdir || '/tmp/paranbuild' }}"
+          RD="${{ inputs.releasedir || '/tmp/paranbuild/release' }}"
+          REL="${{ inputs.release_version }}"
+          mkdir -p "$WD" "$RD"
+          SRC="${{ steps.src.outputs.src }}"
+          if [ -n "$SRC" ]; then
+            echo "Building $pkg with src: $SRC"
+            ./pkg/$pkg/BUILD "$WD" "$SRC" "$REL"
+          else
+            echo "Building $pkg with default source/version"
+            ./pkg/$pkg/BUILD "$WD" "" "$REL"
+          fi
+          OUT_TAR="$RD/$pkg-$REL.tar.gz"
+          ./scripts/pack-paranpackage.sh "pkg/$pkg" "$OUT_TAR"
+          echo "# paran-based $REL" > "$RD/$pkg-CHANGELOG.txt"
+          echo "Built package: $pkg" >> "$RD/$pkg-CHANGELOG.txt"
+
+      - name: Upload assets to release
+        id: upload_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_version }}
+          name: "paran-based ${{ inputs.release_version }}"
+          files: |
+            ${{ inputs.releasedir || '/tmp/paranbuild/release' }}/${{ inputs.package }}-${{ inputs.release_version }}.tar.gz
+            ${{ inputs.releasedir || '/tmp/paranbuild/release' }}/${{ inputs.package }}-CHANGELOG.txt
+          fail_on_unmatched_files: false
