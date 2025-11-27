@@ -11,6 +11,9 @@ on:
       package_input:
         description: 'Optional package name to build (e.g. "acl"). If empty, build all packages listed in pkg/pkg_list.'
         required: false
+      release_version:
+        description: 'Optional release tag (e.g. "v1.2.3"). If empty, tag from git ref will be used.'
+        required: false
 
 permissions:
   contents: write
@@ -31,17 +34,30 @@ jobs:
     steps:
       - name: Create draft release
         uses: softprops/action-gh-release@v2
-        with:
-          tag_name: "${{ env.release_version }}"
-          name: "paran-based ${{ env.release_version }}"
-          body: "Automated draft release; package jobs will attach assets and append changelogs."
-          draft: true
       - name: Set release outputs
         id: set-vars
         run: |
-          echo "release_version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          # prefer workflow_dispatch input, fall back to tag name from ref
+          echo "release_version=${{ github.event.inputs.release_version || github.ref_name }}" >> $GITHUB_OUTPUT
           echo "workdir=/tmp/paranbuild" >> $GITHUB_OUTPUT
           echo "releasedir=/tmp/paranbuild/release" >> $GITHUB_OUTPUT
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "${{ steps.set-vars.outputs.release_version }}"
+          name: "paran-based ${{ steps.set-vars.outputs.release_version }}"
+          body: "Automated draft release; package jobs will attach assets and append changelogs."
+          draft: true
+
+  build-attr:
+    needs: create-release-init
+    uses: ./.github/workflows/build-package.yml
+    with:
+      package: attr
+      release_version: ${{ needs.create-release-init.outputs.release_version }}
+      workdir: ${{ needs.create-release-init.outputs.workdir }}
+      releasedir: ${{ needs.create-release-init.outputs.releasedir }}
 
   build-attr:
     needs: create-release-init
