@@ -53,6 +53,19 @@ jobs:
           REL="${{ inputs.release_version }}"
           mkdir -p "$WD" "$RD"
           SRC="${{ steps.src.outputs.src }}"
+          # Build dependencies first (compute transitive closure using make-matrix.py)
+          if command -v python3 >/dev/null 2>&1 && [ -f scripts/make-matrix.py ]; then
+            echo "Computing transitive dependency closure for $pkg"
+            deps=$(PACKAGE_INPUT="$pkg" python3 scripts/make-matrix.py | jq -r '.[]') || deps=""
+            for d in $deps; do
+              if [ "$d" != "$pkg" ]; then
+                echo "Building dependency: $d"
+                # build dependency with same REL; pass empty SRC so dependency will pick its default
+                ./pkg/$d/BUILD "$WD" "" "$REL"
+              fi
+            done
+          fi
+
           if [ -n "$SRC" ]; then
             echo "Building $pkg with src: $SRC"
             ./pkg/$pkg/BUILD "$WD" "$SRC" "$REL"

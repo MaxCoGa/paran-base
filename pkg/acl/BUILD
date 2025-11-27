@@ -50,7 +50,18 @@ fi
 
 cd "$SRC_DIR"
 echo "Configuring..."
-./configure --prefix=/usr --disable-static --docdir=/usr/share/doc/$SRC_DIR
+# If attr was built earlier in the same workdir, point configure to its staged include/lib
+extra_cflags=""
+extra_ldflags=""
+extra_pkgconfig=""
+if [ -d "$WORKDIR/attr-install/usr" ]; then
+  echo "Found staged attr at $WORKDIR/attr-install/usr, adding include/lib flags"
+  extra_cflags="-I$WORKDIR/attr-install/usr/include"
+  extra_ldflags="-L$WORKDIR/attr-install/usr/lib"
+  extra_pkgconfig="$WORKDIR/attr-install/usr/lib/pkgconfig"
+  export PKG_CONFIG_PATH="$extra_pkgconfig${PKG_CONFIG_PATH:+:}$PKG_CONFIG_PATH"
+fi
+CPPFLAGS="$extra_cflags" LDFLAGS="$extra_ldflags" ./configure --prefix=/usr --disable-static --docdir=/usr/share/doc/$SRC_DIR
 echo "Building..."
 make -j"$(nproc)"
 echo "Installing into staged DESTDIR=$INSTALL_DIR"
