@@ -24,6 +24,10 @@ jobs:
   create-release-init:
     runs-on: ubuntu-latest
     name: Initialize release (draft)
+    outputs:
+      release_version: ${{ steps.set-vars.outputs.release_version }}
+      workdir: ${{ steps.set-vars.outputs.workdir }}
+      releasedir: ${{ steps.set-vars.outputs.releasedir }}
     steps:
       - name: Create draft release
         uses: softprops/action-gh-release@v2
@@ -32,33 +36,39 @@ jobs:
           name: "paran-based ${{ env.release_version }}"
           body: "Automated draft release; package jobs will attach assets and append changelogs."
           draft: true
+      - name: Set release outputs
+        id: set-vars
+        run: |
+          echo "release_version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          echo "workdir=/tmp/paranbuild" >> $GITHUB_OUTPUT
+          echo "releasedir=/tmp/paranbuild/release" >> $GITHUB_OUTPUT
 
   build-attr:
     needs: create-release-init
     uses: ./.github/workflows/build-package.yml
     with:
       package: attr
-      release_version: ${{ env.release_version }}
-      workdir: ${{ env.workdir }}
-      releasedir: ${{ env.releasedir }}
+      release_version: ${{ needs.create-release-init.outputs.release_version }}
+      workdir: ${{ needs.create-release-init.outputs.workdir }}
+      releasedir: ${{ needs.create-release-init.outputs.releasedir }}
 
   build-acl:
     needs: build-attr
     uses: ./.github/workflows/build-package.yml
     with:
       package: acl
-      release_version: ${{ env.release_version }}
-      workdir: ${{ env.workdir }}
-      releasedir: ${{ env.releasedir }}
+      release_version: ${{ needs.create-release-init.outputs.release_version }}
+      workdir: ${{ needs.create-release-init.outputs.workdir }}
+      releasedir: ${{ needs.create-release-init.outputs.releasedir }}
 
   build-gcc:
     needs: build-acl
     uses: ./.github/workflows/build-package.yml
     with:
       package: gcc
-      release_version: ${{ env.release_version }}
-      workdir: ${{ env.workdir }}
-      releasedir: ${{ env.releasedir }}
+      release_version: ${{ needs.create-release-init.outputs.release_version }}
+      workdir: ${{ needs.create-release-init.outputs.workdir }}
+      releasedir: ${{ needs.create-release-init.outputs.releasedir }}
 
   create-release:
     needs: [build-attr, build-acl, build-gcc]
