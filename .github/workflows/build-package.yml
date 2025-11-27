@@ -56,7 +56,7 @@ jobs:
           # Build dependencies first (compute transitive closure using make-matrix.py)
           if command -v python3 >/dev/null 2>&1 && [ -f scripts/make-matrix.py ]; then
             echo "Computing transitive dependency closure for $pkg"
-            deps=$(PACKAGE_INPUT="$pkg" python3 scripts/make-matrix.py | jq -r '.[]') || deps=""
+            deps=$(PACKAGE_INPUT="$pkg" python3 scripts/make-matrix.py | jq -r '.[].name') || deps=""
             for d in $deps; do
               if [ "$d" != "$pkg" ]; then
                 echo "Building dependency: $d"
