@@ -70,7 +70,7 @@ jobs:
       releasedir: ${{ needs.create-release-init.outputs.releasedir }}
 
   build-acl:
-    needs: build-attr
+    needs: [create-release-init, build-attr]
     uses: ./.github/workflows/build-package.yml
     with:
       package: acl
@@ -79,7 +79,7 @@ jobs:
       releasedir: ${{ needs.create-release-init.outputs.releasedir }}
 
   build-gcc:
-    needs: build-acl
+    needs: [create-release-init, build-acl]
     uses: ./.github/workflows/build-package.yml
     with:
       package: gcc
@@ -88,15 +88,15 @@ jobs:
       releasedir: ${{ needs.create-release-init.outputs.releasedir }}
 
   create-release:
-    needs: [build-attr, build-acl, build-gcc]
+    needs: [create-release-init, build-attr, build-acl, build-gcc]
     runs-on: ubuntu-latest
     name: Publish release
     steps:
       - name: Publish release (softprops)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "${{ env.release_version }}"
-          name: "paran-based ${{ env.release_version }}"
+          tag_name: "${{ needs.create-release-init.outputs.release_version }}"
+          name: "paran-based ${{ needs.create-release-init.outputs.release_version }}"
           draft: false
           fail_on_unmatched_files: false
             
