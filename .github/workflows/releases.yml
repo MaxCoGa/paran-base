@@ -88,17 +88,19 @@ jobs:
       workdir: ${{ needs.create-release-init.outputs.workdir }}
       releasedir: ${{ needs.create-release-init.outputs.releasedir }}
 
-  # build-gcc:
-  #   needs: [create-release-init, build-acl]
-  #   uses: ./.github/workflows/build-package.yml
-  #   with:
-  #     package: gcc
-  #     release_version: ${{ needs.create-release-init.outputs.release_version }}
-  #     workdir: ${{ needs.create-release-init.outputs.workdir }}
-  #     releasedir: ${{ needs.create-release-init.outputs.releasedir }}
+  build-automake:
+    needs: [create-release-init]
+    uses: ./.github/workflows/build-package.yml
+    with:
+      package: automake
+      release_version: ${{ needs.create-release-init.outputs.release_version }}
+      workdir: ${{ needs.create-release-init.outputs.workdir }}
+      releasedir: ${{ needs.create-release-init.outputs.releasedir }}
+
+
 
   create-release:
-    needs: [create-release-init, build-attr, build-acl,]#, build-gcc]
+    needs: [create-release-init, build-attr, build-acl, build-autoconf, build-automake]#, build-gcc]
     runs-on: ubuntu-latest
     name: Publish release
     steps:

@@ -1,0 +1,5 @@
+name: automake
+version: 1.16.5
+description: GNU Automake
+install: install.sh
+uninstall: uninstall.sh
