@@ -78,14 +78,23 @@ jobs:
       workdir: ${{ needs.create-release-init.outputs.workdir }}
       releasedir: ${{ needs.create-release-init.outputs.releasedir }}
 
-  build-gcc:
-    needs: [create-release-init, build-acl]
+  build-autoconf:
+    needs: [create-release-init]
     uses: ./.github/workflows/build-package.yml
     with:
-      package: gcc
+      package: autoconf
       release_version: ${{ needs.create-release-init.outputs.release_version }}
       workdir: ${{ needs.create-release-init.outputs.workdir }}
       releasedir: ${{ needs.create-release-init.outputs.releasedir }}
+
+  # build-gcc:
+  #   needs: [create-release-init, build-acl]
+  #   uses: ./.github/workflows/build-package.yml
+  #   with:
+  #     package: gcc
+  #     release_version: ${{ needs.create-release-init.outputs.release_version }}
+  #     workdir: ${{ needs.create-release-init.outputs.workdir }}
+  #     releasedir: ${{ needs.create-release-init.outputs.releasedir }}
 
   create-release:
     needs: [create-release-init, build-attr, build-acl, build-gcc]

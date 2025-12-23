@@ -1,0 +1,5 @@
+name: autoconf
+version: 2.71
+description: GNU Autoconf
+install: install.sh
+uninstall: uninstall.sh
