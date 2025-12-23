@@ -97,7 +97,7 @@ jobs:
   #     releasedir: ${{ needs.create-release-init.outputs.releasedir }}
 
   create-release:
-    needs: [create-release-init, build-attr, build-acl, build-gcc]
+    needs: [create-release-init, build-attr, build-acl,]#, build-gcc]
     runs-on: ubuntu-latest
     name: Publish release
     steps:
