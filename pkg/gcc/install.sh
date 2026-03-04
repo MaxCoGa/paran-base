@@ -26,8 +26,40 @@ if [ -d "$PKG_BASE_DIR/files" ]; then
   echo "Using included files/ tree from package: $PKG_BASE_DIR/files"
   STAGED_DIR="$PKG_BASE_DIR/files"
 else
-  echo "Error: package does not contain a 'files/' build tree. Put the built 'usr/' tree under pkg/gcc/files/ and repack." >&2
-  exit 1
+  # Try packaged tarball in the package directory
+  PKG_TARBALL="$PKG_BASE_DIR/$TARBALL_NAME"
+  if [ -f "$PKG_TARBALL" ]; then
+    echo "Found packaged tarball $PKG_TARBALL, extracting to temporary dir"
+    TMPDIR=$(mktemp -d)
+    tar -xf "$PKG_TARBALL" -C "$TMPDIR"
+    # Expect the tarball to contain a top-level usr/ tree
+    if [ -d "$TMPDIR/usr" ]; then
+      STAGED_DIR="$TMPDIR"
+    else
+      echo "Packaged tarball did not contain expected usr/ tree" >&2
+      rm -rf "$TMPDIR"
+      STAGED_DIR=""
+    fi
+  fi
+
+  # If still not found, try the repository fallback path
+  if [ -z "${STAGED_DIR:-}" ] && [ -f "$FALLBACK_PATH" ]; then
+    echo "Using repository fallback tarball: $FALLBACK_PATH"
+    TMPDIR=$(mktemp -d)
+    tar -xf "$FALLBACK_PATH" -C "$TMPDIR"
+    if [ -d "$TMPDIR/usr" ]; then
+      STAGED_DIR="$TMPDIR"
+    else
+      echo "Fallback tarball did not contain expected usr/ tree" >&2
+      rm -rf "$TMPDIR"
+      STAGED_DIR=""
+    fi
+  fi
+
+  if [ -z "${STAGED_DIR:-}" ]; then
+    echo "Error: package does not contain a 'files/' build tree and no fallback tarball found. Put the built 'usr/' tree under pkg/gcc/files/ and repack." >&2
+    exit 1
+  fi
 fi
 
 # Use the repo installer script to copy the staged usr/ tree into the target prefix.
