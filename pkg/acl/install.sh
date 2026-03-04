@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Install script for the `acl` paranpackage.
 pkgdir="$(cd "$(dirname "$0")/.." && pwd)"
-PKG_NAME="${PKG_NAME:-$(basename "$pkgdir") }"
+PKG_NAME="${PKG_NAME:-$(basename "$pkgdir")}"
 PKG_VERSION="$(awk -F": " '/^version:/ {print $2; exit}' "$pkgdir/MANIFEST" || echo "local")"
 
 PREFIX="$HOME/pp/opt/$PKG_NAME-$PKG_VERSION"
